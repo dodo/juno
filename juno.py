@@ -49,7 +49,7 @@ class Juno(object):
                 '404_template':            '404.html',
                 '500_template':            '500.html',
                 # Database options
-                'use_db':      True,
+                'use_db':      False,
                 'db_type':     'sqlite',
                 'db_location': ':memory:',
                 'db_models':   {},
