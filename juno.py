@@ -3,6 +3,7 @@ import mimetypes
 import re
 import os
 import sys
+import traceback
 # Server imports
 import urlparse
 import cgi
@@ -197,7 +198,7 @@ class Juno(object):
                 try:
                     response = route.dispatch(req_obj)
                 except:
-                    return servererror(error=cgi.escape(str(sys.exc_info()))).render()
+                    return servererror(error=cgi.escape(traceback.format_exc())).render()
             # If nothing returned, use the global object
             if response is None: response = _response
             # If we don't have a string, render the Response to one
