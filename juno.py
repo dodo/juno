@@ -32,6 +32,7 @@ class Juno(object):
                 'scgi_port': 8000,
                 'fcgi_port': 8000,
                 'dev_port':  8000,
+                'bind_address': '127.0.0.1',
                 # Static file handling
                 'use_static':     True,
                 'static_url':     '/static/*:file/',
@@ -166,9 +167,9 @@ class Juno(object):
         # Otherwise store the specified mode
         else: config('mode', mode)
         
-        if   mode == 'dev':  run_dev('',  config('dev_port'),  self.request)
-        elif mode == 'scgi': run_scgi('', config('scgi_port'), self.request)
-        elif mode == 'fcgi': run_fcgi('', config('fcgi_port'), self.request)
+        if   mode == 'dev':  run_dev(config('bind_address'), config('dev_port'),  self.request)
+        elif mode == 'scgi': run_scgi(config('bind_address'), config('scgi_port'), self.request)
+        elif mode == 'fcgi': run_fcgi(config('bind_address'), config('fcgi_port'), self.request)
         elif mode == 'wsgi': return run_wsgi(self.request)
         elif mode == 'appengine': run_appengine(self.request)
         else:
