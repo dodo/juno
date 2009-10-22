@@ -4,6 +4,7 @@ import re
 import os
 import sys
 import traceback
+import time
 # Server imports
 import urlparse
 import cgi
@@ -38,6 +39,7 @@ class Juno(object):
                 'static_url':     '/static/*:file/',
                 'static_root':    os.path.join(self.app_path, 'static/'),
                 'static_handler': static_serve,
+                'static_expires': 0,
                 # Template options
                 'use_templates':           True,
                 'template_lib':            'jinja2',
@@ -519,6 +521,10 @@ def static_serve(web, file):
         notfound("that file could not be found/served")
     elif yield_file(file) != 7:
         notfound("that file could not be found/served")
+    mtime = os.stat(file).st_mtime
+    header('Last-Modified', time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(mtime)))
+    if config('static_expires'):
+        header('Expires', time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(time.time() + config('static_expires'))))
 
 def yield_file(filename, type=None):
     """Append the content of a file to the response. Guesses file type if not
@@ -531,7 +537,7 @@ def yield_file(filename, type=None):
         if guess is None: content_type('text/plain')
         else: content_type(guess)
     else: content_type(type)
-    append(open(filename, 'r').read())
+    append(open(filename, 'rb').read())
     return 7
 
 #
