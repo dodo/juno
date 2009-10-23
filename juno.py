@@ -19,7 +19,7 @@ class Juno(object):
         else: _hub = self
         self.routes = []
         # Find the directory of the user's app, so we can setup static/template_roots
-        self.find_user_path()
+        self.find_user_path(configuration)
         # Set options and merge in user-set options
         self.config = {
                 # General settings / meta information
@@ -76,7 +76,10 @@ class Juno(object):
         if self.config['use_db']:
             self.setup_database()
 
-    def find_user_path(self):
+    def find_user_path(self, configuration):
+        if configuration is not None and 'app_path' in configuration:
+            self.app_path = configuration['app_path']
+            return
         # This section may look strange, but it seems like the only solution.
         # Basically, we need the directory of the user's app in order to setup
         # the static/template_roots.  When we run under mod_wsgi, we can't use
@@ -139,7 +142,7 @@ class Juno(object):
                                 String, Unicode, Text, UnicodeText, Date, Numeric, 
                                 Time, Float, DateTime, Interval, Binary, Boolean, 
                                 PickleType)
-        from sqlalchemy.orm import sessionmaker, mapper
+        from sqlalchemy.orm import sessionmaker, mapper, scoped_session
         # Create global name mappings for model()
         global column_mapping
         column_mapping = {'string': String,       'str': String,
@@ -160,7 +163,7 @@ class Juno(object):
             self.config['db_location'] = '/' + self.config['db_location']
         eng_name = self.config['db_type'] + '://' + self.config['db_location']
         self.config['db_engine'] = create_engine(eng_name)
-        self.config['db_session'] = sessionmaker(bind=self.config['db_engine'])()
+        self.config['db_session'] = scoped_session(sessionmaker(bind=self.config['db_engine']))
 
     def run(self, mode=None):
         """Runs the Juno hub, in the set mode (default now is dev). """
@@ -610,7 +613,7 @@ class JunoClassConstructor(type):
 # Map SQLAlchemy's types to string versions of them for convenience
 column_mapping = {} # Constructed in Juno.setup_database
 
-session = lambda: config('db_session')
+session = lambda: config('db_session')()
 
 def model(model_name, **kwargs):
     if not _hub: init()
@@ -731,6 +734,7 @@ def get_application(process_func):
                                                  environ['REQUEST_METHOD'],
                                                  **environ)
         start_response(status_str, headers)
+        session().close()
         return [body]
 
     middleware_list = []
