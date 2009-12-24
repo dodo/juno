@@ -6,6 +6,7 @@ import sys
 # Server imports
 import urlparse
 import cgi
+import traceback
 
 class Juno(object):
     def __init__(self, configuration=None):
@@ -50,6 +51,7 @@ class Juno(object):
                 '500_template':            '500.html',
                 '404_mimetype':            None,
                 '500_mimetype':            None,
+                '500_traceback':           False,
                 # Database options
                 'use_db':      True,
                 'db_type':     'sqlite',
@@ -504,7 +506,11 @@ def notfound(error='Unspecified error', file=None):
 
 def servererror(error='Unspecified error', file=None):
     """Sets the response to a 500, sets the body to 500_template."""
-    if config('log'): print >>sys.stderr, 'Error: (%s, %s, %s)' % sys.exc_info()
+    t, v, tb = sys.exc_info()
+    if config('log'):
+        print >>sys.stderr, 'Error: (%s, %s)' % (t, v)
+        if config('500_traceback'):
+            traceback.print_tb(tb)
     status(500)
     mt = config('500_mimetype')
     if mt:
