@@ -8,7 +8,6 @@ import time
 # Server imports
 import urlparse
 import cgi
-import traceback
 
 class Juno(object):
     def __init__(self, configuration=None):
@@ -773,7 +772,7 @@ def get_application(process_func):
                                                  environ['REQUEST_METHOD'],
                                                  **environ)
         start_response(status_str, headers)
-        session().close()
+        if config('use_sessions'): session().close()
         return [body]
 
     middleware_list = []
