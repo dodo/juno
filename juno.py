@@ -3,6 +3,8 @@ import mimetypes
 import re
 import os
 import sys
+import traceback
+import time
 # Server imports
 import urlparse
 import cgi
@@ -18,7 +20,7 @@ class Juno(object):
         else: _hub = self
         self.routes = []
         # Find the directory of the user's app, so we can setup static/template_roots
-        self.find_user_path()
+        self.find_user_path(configuration)
         # Set options and merge in user-set options
         self.config = {
                 # General settings / meta information
@@ -39,6 +41,7 @@ class Juno(object):
                 'static_url':     '/static/*:file/',
                 'static_root':    os.path.join(self.app_path, 'static/'),
                 'static_handler': static_serve,
+                'static_expires': 0,
                 # Template options
                 'use_templates':           True,
                 'template_lib':            'jinja2',
@@ -78,7 +81,10 @@ class Juno(object):
         if self.config['use_db']:
             self.setup_database()
 
-    def find_user_path(self):
+    def find_user_path(self, configuration):
+        if configuration is not None and 'app_path' in configuration:
+            self.app_path = configuration['app_path']
+            return
         # This section may look strange, but it seems like the only solution.
         # Basically, we need the directory of the user's app in order to setup
         # the static/template_roots.  When we run under mod_wsgi, we can't use
@@ -141,7 +147,7 @@ class Juno(object):
                                 String, Unicode, Text, UnicodeText, Date, Numeric, 
                                 Time, Float, DateTime, Interval, Binary, Boolean, 
                                 PickleType)
-        from sqlalchemy.orm import sessionmaker, mapper
+        from sqlalchemy.orm import sessionmaker, mapper, scoped_session
         # Create global name mappings for model()
         global column_mapping
         column_mapping = {'string': String,       'str': String,
@@ -162,7 +168,7 @@ class Juno(object):
             self.config['db_location'] = '/' + self.config['db_location']
         eng_name = self.config['db_type'] + '://' + self.config['db_location']
         self.config['db_engine'] = create_engine(eng_name)
-        self.config['db_session'] = sessionmaker(bind=self.config['db_engine'])()
+        self.config['db_session'] = scoped_session(sessionmaker(bind=self.config['db_engine']))
 
     def run(self, mode=None):
         """Runs the Juno hub, in the set mode (default now is dev). """
@@ -202,7 +208,7 @@ class Juno(object):
                 try:
                     response = route.dispatch(req_obj)
                 except:
-                    return servererror(error=cgi.escape(str(sys.exc_info()))).render()
+                    return servererror(error=cgi.escape(traceback.format_exc())).render()
             # If nothing returned, use the global object
             if response is None: response = _response
             # If we don't have a string, render the Response to one
@@ -555,6 +561,10 @@ def static_serve(web, file):
         notfound("that file could not be found/served")
     elif yield_file(file) != 7:
         notfound("that file could not be found/served")
+    mtime = os.stat(file).st_mtime
+    header('Last-Modified', time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(mtime)))
+    if config('static_expires'):
+        header('Expires', time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(time.time() + config('static_expires'))))
 
 def yield_file(filename, type=None):
     """Append the content of a file to the response. Guesses file type if not
@@ -567,7 +577,7 @@ def yield_file(filename, type=None):
         if guess is None: content_type('text/plain')
         else: content_type(guess)
     else: content_type(type)
-    append(open(filename, 'r').read())
+    append(open(filename, 'rb').read())
     return 7
 
 #
@@ -640,7 +650,7 @@ class JunoClassConstructor(type):
 # Map SQLAlchemy's types to string versions of them for convenience
 column_mapping = {} # Constructed in Juno.setup_database
 
-session = lambda: config('db_session')
+session = lambda: config('db_session')()
 
 def model(model_name, **kwargs):
     if not _hub: init()
@@ -763,6 +773,7 @@ def get_application(process_func):
                                                  environ['REQUEST_METHOD'],
                                                  **environ)
         start_response(status_str, headers)
+        session().close()
         return [body]
 
     middleware_list = []
