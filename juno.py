@@ -430,11 +430,33 @@ def config(key, value=None):
 
 def run(mode=None):
     """Start Juno, with an optional mode argument."""
+    if _nut is not None:
+        print >>sys.stderr, 'Discard starting Juno because there is a nutshell opened.'
+        return
     if _hub is None: init()
     if len(sys.argv) > 1:
         if '-mode=' in sys.argv[1]: mode = sys.argv[1].split('=')[1]
         elif '-mode' == sys.argv[1]: mode = sys.argv[2]
     return _hub.run(mode)
+
+
+_nut = None
+
+def open_nutshell():
+    global _nut, _hub
+    if _nut is not None:
+        print >>sys.stderr, 'Warning: there is already a Juno object in the nutshell;'
+        print >>sys.stderr, '         there can only be one in by time.'
+        return
+    _nut, _hub = _hub, None
+
+def close_nutshell():
+    global _nut, _hub
+    if _nut is not None:
+        _hub, _nut = _nut, None
+
+def getHub():
+    return _hub
 
 #
 #   Decorators to add routes based on request methods
