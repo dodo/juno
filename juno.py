@@ -6,6 +6,7 @@ import sys
 # Server imports
 import urlparse
 import cgi
+import traceback
 
 class Juno(object):
     def __init__(self, configuration=None):
@@ -48,6 +49,9 @@ class Juno(object):
                 'template_root':           os.path.join(self.app_path, 'templates/'),
                 '404_template':            '404.html',
                 '500_template':            '500.html',
+                '404_mimetype':            None,
+                '500_mimetype':            None,
+                '500_traceback':           False,
                 # Database options
                 'use_db':      True,
                 'db_type':     'sqlite',
@@ -516,13 +520,23 @@ def notfound(error='Unspecified error', file=None):
     """Sets the response to a 404, sets the body to 404_template."""
     if config('log'): print >>sys.stderr, 'Not Found: %s' % error
     status(404)
+    mt = config('404_mimetype')
+    if mt:
+        content_type(mt)
     if file is None: file = config('404_template')
     return template(file, error=error)
 
 def servererror(error='Unspecified error', file=None):
     """Sets the response to a 500, sets the body to 500_template."""
-    if config('log'): print >>sys.stderr, 'Error: (%s, %s, %s)' % sys.exc_info()
+    t, v, tb = sys.exc_info()
+    if config('log'):
+        print >>sys.stderr, 'Error: (%s, %s)' % (t, v)
+        if config('500_traceback'):
+            traceback.print_tb(tb)
     status(500)
+    mt = config('500_mimetype')
+    if mt:
+        content_type(mt)
     if file is None: file = config('500_template')
     # Resets the response, in case the error occurred as we added data to it
     _response.config['body'] = ''
