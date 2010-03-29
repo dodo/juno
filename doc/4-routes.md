@@ -26,7 +26,7 @@ like so:
 This lets you send multiple addresses to one view.
 
 
-Getting the Reqeust Method Involved
+Getting the Request Method Involved
 -------------------------------------
 
 But what if you want a view to only respond to POST requests? You could do this:
