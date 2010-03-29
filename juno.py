@@ -42,7 +42,7 @@ class Juno(object):
                 'static_handler': static_serve,
                 'static_expires': 0,
                 # Template options
-                'use_templates':           True,
+                'use_templates':           False,
                 'template_lib':            'jinja2',
                 'get_template_handler':    _get_template_handler,
                 'render_template_handler': _render_template_handler,
