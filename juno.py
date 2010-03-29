@@ -510,6 +510,17 @@ def status(code):
 #   Convenience functions for 404s and redirects
 #
 
+def subdirect(web, proj, request):
+  if request == '': request = '/'
+  if request[-1] != '/': request += '/'
+  if request[ 0] != '/': request = '/' + request
+  if config('log'): print 'subdirecting from %s to %s' % (web['PATH_INFO'], request)
+  status_string, headers, body = proj.request(request, web['REQUEST_METHOD'], **web.raw)
+  for key, value in headers: header(key, value)
+  status(int(status_string.split()[0]))
+  append(body)
+  return _response
+
 def redirect(url, code=302):
     status(code)
     # clear the response headers and add the location header
