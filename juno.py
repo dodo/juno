@@ -639,13 +639,15 @@ def _render_template_handler(template_obj, **kwargs):
         # Jinja needs its output encoded here
         return template_obj.render(**kwargs).encode(config('charset'))
 
-def autotemplate(urls, template_path):
+def autotemplate(urls, template_path, **kwargs):
     """Automatically renders a template for a given path.  Currently can't
     use any arguments in the url."""
     if type(urls) not in (list, tuple): urls = [urls]
     for url in urls:
         @route(url)
-        def temp(web): template(template_path)
+        def temp(web,**tempkwargs):
+            tempkwargs.update(kwargs)
+            template(template_path,tempkwargs)
 
 ####
 #   Data modeling functions
