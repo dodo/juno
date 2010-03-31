@@ -118,18 +118,20 @@ class Juno(object):
             if len(self.config['translations']) != 0:
                 extensions = ['jinja2.ext.i18n']
             else:
-                extensions = ()
-            self.config['template_env'] = jinja2.Environment(
-                loader      = jinja2.FileSystemLoader(
+                extensions = []
+            kwargs = self.config['template_kwargs']
+            if 'extensions' in kwargs: extensions.extend(kwargs['extensions'])
+            kwargs.update({
+                'loader'      : jinja2.FileSystemLoader(
                                 searchpath = self.config['template_root'],
                                 encoding   = self.config['charset'],
                               ),
-                auto_reload = self.config['auto_reload_templates'],
-                extensions = extensions,
-                **self.config['template_kwargs']
-            )
+                'auto_reload' : self.config['auto_reload_templates'],
+                'extensions' : extensions
+            })
+            env = self.config['template_env'] = jinja2.Environment(**kwargs)
             for translation in self.config['translations']:
-                self.config['template_env'].install_gettext_translations(translation)
+                env.install_gettext_translations(translation)
         if self.config['template_lib'] == 'mako':
             import mako.lookup
             self.config['template_env'] = mako.lookup.TemplateLookup(
