@@ -642,7 +642,7 @@ def _render_template_handler(template_obj, **kwargs):
 def autotemplate(urls, template_path):
     """Automatically renders a template for a given path.  Currently can't
     use any arguments in the url."""
-    if type(urls) not in (list, tuple): urls = urls[urls]
+    if type(urls) not in (list, tuple): urls = [urls]
     for url in urls:
         @route(url)
         def temp(web): template(template_path)
