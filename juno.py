@@ -372,7 +372,7 @@ class JunoResponse(object):
         self.config = {
             'body': '',
             'status': 200,
-            'headers': { 'Content-Type': config('content_type'), },
+            'headers': { 'Content-Type': "%s; charset=%s"%(config('content_type'),config('charset')) },
         }
         if configuration is None: configuration = {}
         self.config.update(configuration)
