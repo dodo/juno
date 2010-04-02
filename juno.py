@@ -381,7 +381,13 @@ class JunoResponse(object):
     
     # Add text and adjust content-length
     def append(self, text):
-        if type(text) is bytes: text = str(text, config('charset'))
+        if type(text) is bytes:
+            if self.config['headers']['Content-Type'].startswith('text'):
+                text = str(text, config('charset'))
+            else: 
+                self.config['body'] = text
+                self.config['headers']['Content-Length'] = len(text)
+                return self
         self.config['body'] += str(text)
         self.config['headers']['Content-Length'] = len(self.config['body'])
         return self
@@ -395,8 +401,7 @@ class JunoResponse(object):
         status_string = '%s %s' %(self.config['status'],
                                   self.status_codes[self.config['status']])
         headers = [(k, str(v)) for k, v in list(self.config['headers'].items())]
-        body = '%s' % self.config['body']
-        return (status_string, headers, body)
+        return (status_string, headers, self.config['body'])
 
     # Set a header value
     def header(self, header, value):
@@ -786,7 +791,7 @@ def get_application(process_func):
                                                  **environ)
         start_response(status_str, headers)
         if config('use_sessions'): session().close()
-        body = body.encode(config('charset'))
+        if isinstance(body, str): body = body.encode(config('charset'))
         return [body]
 
     middleware_list = []
