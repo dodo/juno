@@ -70,6 +70,7 @@ class Juno(object):
                 'middleware': []
         }
         if configuration is not None: self.config.update(configuration)
+        if 'app_apth' not in self.config: self.config['app_path'] = self.app_path
         # Set up the static file handler
         if self.config['use_static']: 
             self.setup_static()
