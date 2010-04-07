@@ -527,7 +527,7 @@ def subdirect(web, proj, request):
   status_string, headers, body = proj.request(request, web['REQUEST_METHOD'], **web.raw)
   for key, value in headers: header(key, value)
   status(int(status_string.split()[0]))
-  append(body)
+  if _response.body != body: append(body) #FIXME
   return _response
 
 def redirect(url, code=302):
