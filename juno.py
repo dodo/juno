@@ -607,12 +607,6 @@ def autotemplate(urls, template_path):
 #   Data modeling functions
 ####
 
-class JunoClassConstructor(type):
-    def __new__(cls, name, bases, dct):
-        return type.__new__(cls, name, bases, dct)
-    def __init__(cls, name, bases, dct):
-        super(JunoClassConstructor, cls).__init__(name, bases, dct)
-
 # Map SQLAlchemy's types to string versions of them for convenience
 column_mapping = {} # Constructed in Juno.setup_database
 
@@ -662,7 +656,7 @@ def model(model_name, **kwargs):
             else: raise NameError("'%s' is not an allowed database column" %v)
             cols.append(Column(k, v))
     # Create the class    
-    tmp = JunoClassConstructor(model_name, (object,), cls_dict)
+    tmp = type(model_name, (object,), cls_dict)
     # Add the functions that need an instance of the class
     tmp.find = staticmethod(lambda: find_func(tmp))
     # Create the table
