@@ -58,7 +58,10 @@ class Juno(object):
                 'db_models':   {},
                 # Session options
                 'use_sessions': False,
-                'session_lib':  'beaker',
+                'session_lib': 'beaker',
+                'session_type': 'cookie',
+                'session_key': 'session',
+                'session_secret': '',
                 # Debugger
                 'use_debugger': False,
                 'raise_view_exceptions': False,
@@ -741,7 +744,14 @@ def get_application(process_func):
     if config('use_debugger'):
         middleware_list.append(('werkzeug.DebuggedApplication', {'evalex': True}))
     if config('use_sessions') and config('session_lib') == 'beaker':
-        middleware_list.append(('beaker.middleware.SessionMiddleware', {}))
+        opts = {'session.key': config('session_key'), 'session.secret': config('session_secret'), 'session.cookie_expires': False}
+        if config('session_type') == 'cookie':
+            opts['session.type'] = 'cookie'
+            opts['session.validate_key'] = config('session_secret')
+        else:
+            opts['session.type'] = 'ext:database'
+            opts['session.url'] = config('db_type') + '://' + config('db_location')
+        middleware_list.append(('beaker.middleware.SessionMiddleware', opts))
     middleware_list.extend(config('middleware'))
     application = _load_middleware(application, middleware_list)
 
