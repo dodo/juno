@@ -519,16 +519,19 @@ def status(code):
 #   Convenience functions for 404s and redirects
 #
 
-def subdirect(web, proj, request):
-  if request == '': request = '/'
-  if request[-1] != '/': request += '/'
-  if request[ 0] != '/': request = '/' + request
-  if config('log'): print('subdirecting from %s to %s' % (web['PATH_INFO'], request))
-  status_string, headers, body = proj.request(request, web['REQUEST_METHOD'], **web.raw)
-  for key, value in headers: header(key, value)
-  status(int(status_string.split()[0]))
-  if _response.body != body: append(body) #FIXME
-  return _response
+def subdirect(web, hub, request):
+    global _hub
+    if request == '': request = '/'
+    if request[-1] != '/': request += '/'
+    if request[ 0] != '/': request = '/' + request
+    if config('log'): print('subdirecting from %s to %s' % (web['PATH_INFO'], request))
+    org, _hub = _hub, hub
+    status_string, headers, body = hub.request(request, web['REQUEST_METHOD'], **web.raw)
+    _hub = org
+    for key, value in headers: header(key, value)
+    status(int(status_string.split()[0]))
+    if _response.body != body: append(body) #FIXME
+    return _response
 
 def redirect(url, code=302):
     status(code)
