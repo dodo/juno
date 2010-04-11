@@ -514,6 +514,7 @@ def status(code):
 #
 
 def subdirect(web, hub, request):
+    global _hub
     if request == '': request = '/'
     if request[-1] != '/': request += '/'
     if request[ 0] != '/': request = '/' + request
