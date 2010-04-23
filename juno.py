@@ -236,24 +236,32 @@ class Juno(object):
 class JunoRoute(object):
     """Uses a simplified regex to grab url parts:
     i.e., '/hello/*:name/' compiles to '^/hello/(?P<name>\w+)/' """
+    
+    # RE to match the splat format
+    splat_re = re.compile('^(?P<type>[*w]?):(?P<var>\w+)$')
+    
     def __init__(self, url, func, method):
         # Make sure the url begins and ends in a '/'
         if url[0] != '/': url = '/' + url
         if url[-1] != '/': url += '/'
         # Store the old one before we modify it (we use it for __repr__)
         self.old_url = url
-        # RE to match the splat format
-        splat_re = re.compile('^\*?:(?P<var>\w+)$')
         # Start building our modified url
         buffer = '^'
         for part in url.split('/'):
             # Beginning and end entries are empty, so skip them
             if not part: continue
-            match_obj = splat_re.match(part)
+            md = self.splat_re.match(part)
             # If it doesn't match, just add it without modification
-            if match_obj is None: buffer += '/' + part
-            # Otherwise replace it with python's regex format
-            else: buffer += '/(?P<' + match_obj.group('var') + '>.*)'
+            if not md:
+                buffer += '/' + part
+            else:
+                # Otherwise replace it with python's regex format
+                patterns = {'*': '.+', 'w': r'\w+'}
+                type_ = md.group('type') or '*'
+                if type_ not in patterns:
+                    raise ValueError, 'Invalid parse type: %s'%type_
+                buffer += '/(?P<%s>%s)'%(md.group('var'), patterns[type_])
         # If we don't end with a wildcard, add a end of line modifier    
         if buffer[-1] != ')': buffer += '/$'
         else: buffer += '/'
