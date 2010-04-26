@@ -666,7 +666,7 @@ def model(model_name, **kwargs):
     # Create the class    
     tmp = type(model_name, (object,), cls_dict)
     # Add the functions that need an instance of the class
-    tmp.find = staticmethod(lambda: find_func(tmp))
+    tmp.find = classmethod(find_func)
     # Create the table
     metadata = MetaData()
     tmp_table = Table(model_name + 's', metadata, *cols)
