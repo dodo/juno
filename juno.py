@@ -625,7 +625,7 @@ def model(model_name, **kwargs):
     # Functions for the class
     def __init__(self, **kwargs):
         for k, v in kwargs.items(): 
-            self.__dict__[k] = v
+            setattr(self, k, v)
     def add(self): 
         session().add(self)
         return self
