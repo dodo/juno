@@ -56,6 +56,7 @@ class Juno(object):
                 # Session options
                 'use_sessions': False,
                 'session_lib':  'beaker',
+                'session_kwargs': {},
                 # Debugger
                 'use_debugger': False,
                 'raise_view_exceptions': False,
@@ -730,7 +731,7 @@ def get_application(process_func):
     if config('use_debugger'):
         middleware_list.append(('werkzeug.DebuggedApplication', {'evalex': True}))
     if config('use_sessions') and config('session_lib') == 'beaker':
-        middleware_list.append(('beaker.middleware.SessionMiddleware', {}))
+        middleware_list.append(('beaker.middleware.SessionMiddleware', config('session_kwargs')))
     middleware_list.extend(config('middleware'))
     application = _load_middleware(application, middleware_list)
 
