@@ -3,6 +3,8 @@ import mimetypes
 import re
 import os
 import sys
+import traceback
+import time
 # Server imports
 import urlparse
 import cgi
@@ -17,7 +19,7 @@ class Juno(object):
         else: _hub = self
         self.routes = []
         # Find the directory of the user's app, so we can setup static/template_roots
-        self.find_user_path()
+        self.find_user_path(configuration)
         # Set options and merge in user-set options
         self.config = {
                 # General settings / meta information
@@ -32,13 +34,15 @@ class Juno(object):
                 'scgi_port': 8000,
                 'fcgi_port': 8000,
                 'dev_port':  8000,
+                'bind_address': '127.0.0.1',
                 # Static file handling
                 'use_static':     True,
                 'static_url':     '/static/*:file/',
                 'static_root':    os.path.join(self.app_path, 'static/'),
                 'static_handler': static_serve,
+                'static_expires': 0,
                 # Template options
-                'use_templates':           True,
+                'use_templates':           False,
                 'template_lib':            'jinja2',
                 'get_template_handler':    _get_template_handler,
                 'render_template_handler': _render_template_handler,
@@ -48,8 +52,11 @@ class Juno(object):
                 'template_root':           os.path.join(self.app_path, 'templates/'),
                 '404_template':            '404.html',
                 '500_template':            '500.html',
+                '404_mimetype':            None,
+                '500_mimetype':            None,
+                '500_traceback':           False,
                 # Database options
-                'use_db':      True,
+                'use_db':      False,
                 'db_type':     'sqlite',
                 'db_location': ':memory:',
                 'db_models':   {},
@@ -63,6 +70,7 @@ class Juno(object):
                 'middleware': []
         }
         if configuration is not None: self.config.update(configuration)
+        if 'app_apth' not in self.config: self.config['app_path'] = self.app_path
         # Set up the static file handler
         if self.config['use_static']:
             self.setup_static()
@@ -73,7 +81,10 @@ class Juno(object):
         if self.config['use_db']:
             self.setup_database()
 
-    def find_user_path(self):
+    def find_user_path(self, configuration):
+        if configuration is not None and 'app_path' in configuration:
+            self.app_path = configuration['app_path']
+            return
         # This section may look strange, but it seems like the only solution.
         # Basically, we need the directory of the user's app in order to setup
         # the static/template_roots.  When we run under mod_wsgi, we can't use
@@ -108,18 +119,20 @@ class Juno(object):
             if len(self.config['translations']) != 0:
                 extensions = ['jinja2.ext.i18n']
             else:
-                extensions = ()
-            self.config['template_env'] = jinja2.Environment(
-                loader      = jinja2.FileSystemLoader(
+                extensions = []
+            kwargs = self.config['template_kwargs']
+            if 'extensions' in kwargs: extensions.extend(kwargs['extensions'])
+            kwargs.update({
+                'loader'      : jinja2.FileSystemLoader(
                                 searchpath = self.config['template_root'],
                                 encoding   = self.config['charset'],
                               ),
-                auto_reload = self.config['auto_reload_templates'],
-                extensions = extensions,
-                **self.config['template_kwargs']
-            )
+                'auto_reload' : self.config['auto_reload_templates'],
+                'extensions' : extensions
+            })
+            env = self.config['template_env'] = jinja2.Environment(**kwargs)
             for translation in self.config['translations']:
-                self.config['template_env'].install_gettext_translations(translation)
+                env.install_gettext_translations(translation)
         if self.config['template_lib'] == 'mako':
             import mako.lookup
             self.config['template_env'] = mako.lookup.TemplateLookup(
@@ -136,7 +149,7 @@ class Juno(object):
                                 String, Unicode, Text, UnicodeText, Date, Numeric,
                                 Time, Float, DateTime, Interval, Binary, Boolean,
                                 PickleType)
-        from sqlalchemy.orm import sessionmaker, mapper
+        from sqlalchemy.orm import sessionmaker, mapper, scoped_session
         # Create global name mappings for model()
         global column_mapping
         column_mapping = {'string': String,       'str': String,
@@ -157,7 +170,7 @@ class Juno(object):
             self.config['db_location'] = '/' + self.config['db_location']
         eng_name = self.config['db_type'] + '://' + self.config['db_location']
         self.config['db_engine'] = create_engine(eng_name)
-        self.config['db_session'] = sessionmaker(bind=self.config['db_engine'])()
+        self.config['db_session'] = scoped_session(sessionmaker(bind=self.config['db_engine']))
 
     def run(self, mode=None):
         """Runs the Juno hub, in the set mode (default now is dev). """
@@ -166,9 +179,9 @@ class Juno(object):
         # Otherwise store the specified mode
         else: config('mode', mode)
 
-        if   mode == 'dev':  run_dev('',  config('dev_port'),  self.request)
-        elif mode == 'scgi': run_scgi('', config('scgi_port'), self.request)
-        elif mode == 'fcgi': run_fcgi('', config('fcgi_port'), self.request)
+        if   mode == 'dev':  run_dev(config('bind_address'), config('dev_port'),  self.request)
+        elif mode == 'scgi': run_scgi(config('bind_address'), config('scgi_port'), self.request)
+        elif mode == 'fcgi': run_fcgi(config('bind_address'), config('fcgi_port'), self.request)
         elif mode == 'wsgi': return run_wsgi(self.request)
         elif mode == 'appengine': run_appengine(self.request)
         else:
@@ -197,7 +210,7 @@ class Juno(object):
                 try:
                     response = route.dispatch(req_obj)
                 except:
-                    return servererror(error=cgi.escape(str(sys.exc_info()))).render()
+                    return servererror(error=cgi.escape(traceback.format_exc())).render()
             # If nothing returned, use the global object
             if response is None: response = _response
             # If we don't have a string, render the Response to one
@@ -360,7 +373,7 @@ class JunoResponse(object):
         self.config = {
             'body': '',
             'status': 200,
-            'headers': { 'Content-Type': config('content_type'), },
+            'headers': { 'Content-Type': "%s; charset=%s"%(config('content_type'),config('charset')) },
         }
         if configuration is None: configuration = {}
         self.config.update(configuration)
@@ -430,11 +443,33 @@ def config(key, value=None):
 
 def run(mode=None):
     """Start Juno, with an optional mode argument."""
+    if _nut is not None:
+        print >>sys.stderr, 'Discard starting Juno because there is a nutshell opened.'
+        return
     if _hub is None: init()
     if len(sys.argv) > 1:
         if '-mode=' in sys.argv[1]: mode = sys.argv[1].split('=')[1]
         elif '-mode' == sys.argv[1]: mode = sys.argv[2]
     return _hub.run(mode)
+
+
+_nut = None
+
+def open_nutshell():
+    global _nut, _hub
+    if _nut is not None:
+        print >>sys.stderr, 'Warning: there is already a Juno object in the nutshell;'
+        print >>sys.stderr, '         there can only be one in by time.'
+        return
+    _nut, _hub = _hub, None
+
+def close_nutshell():
+    global _nut, _hub
+    if _nut is not None:
+        _hub, _nut = _nut, None
+
+def getHub():
+    return _hub
 
 #
 #   Decorators to add routes based on request methods
@@ -478,6 +513,20 @@ def status(code):
 #   Convenience functions for 404s and redirects
 #
 
+def subdirect(web, hub, request):
+    global _hub
+    if request == '': request = '/'
+    if request[-1] != '/': request += '/'
+    if request[ 0] != '/': request = '/' + request
+    if config('log'): print 'subdirecting from %s to %s' % (web['PATH_INFO'], request)
+    org, _hub = _hub, hub
+    status_string, headers, body = hub.request(request, web['REQUEST_METHOD'], **web.raw)
+    _hub = org
+    for key, value in headers: header(key, value)
+    status(int(status_string.split()[0]))
+    append(body)
+    return _response
+
 def redirect(url, code=302):
     status(code)
     # clear the response headers and add the location header
@@ -494,13 +543,23 @@ def notfound(error='Unspecified error', file=None):
     """Sets the response to a 404, sets the body to 404_template."""
     if config('log'): print >>sys.stderr, 'Not Found: %s' % error
     status(404)
+    mt = config('404_mimetype')
+    if mt:
+        content_type(mt)
     if file is None: file = config('404_template')
     return template(file, error=error)
 
 def servererror(error='Unspecified error', file=None):
     """Sets the response to a 500, sets the body to 500_template."""
-    if config('log'): print >>sys.stderr, 'Error: (%s, %s, %s)' % sys.exc_info()
+    t, v, tb = sys.exc_info()
+    if config('log'):
+        print >>sys.stderr, 'Error: (%s, %s)' % (t, v)
+        if config('500_traceback'):
+            traceback.print_tb(tb)
     status(500)
+    mt = config('500_mimetype')
+    if mt:
+        content_type(mt)
     if file is None: file = config('500_template')
     # Resets the response, in case the error occurred as we added data to it
     _response.config['body'] = ''
@@ -518,6 +577,10 @@ def static_serve(web, file):
         notfound("that file could not be found/served")
     elif yield_file(file) != 7:
         notfound("that file could not be found/served")
+    mtime = os.stat(file).st_mtime
+    header('Last-Modified', time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(mtime)))
+    if config('static_expires'):
+        header('Expires', time.strftime('%a, %d %b %Y %H:%M:%S +0000', time.gmtime(time.time() + config('static_expires'))))
 
 def yield_file(filename, type=None):
     """Append the content of a file to the response. Guesses file type if not
@@ -530,7 +593,7 @@ def yield_file(filename, type=None):
         if guess is None: content_type('text/plain')
         else: content_type(guess)
     else: content_type(type)
-    append(open(filename, 'r').read())
+    append(open(filename, 'rb').read())
     return 7
 
 #
@@ -582,13 +645,15 @@ def _render_template_handler(template_obj, **kwargs):
         # Jinja needs its output encoded here
         return template_obj.render(**kwargs).encode(config('charset'))
 
-def autotemplate(urls, template_path):
+def autotemplate(urls, template_path, **kwargs):
     """Automatically renders a template for a given path.  Currently can't
     use any arguments in the url."""
-    if type(urls) not in (list, tuple): urls = urls[urls]
+    if type(urls) not in (list, tuple): urls = [urls]
     for url in urls:
         @route(url)
-        def temp(web): template(template_path)
+        def temp(web,**tempkwargs):
+            tempkwargs.update(kwargs)
+            template(template_path,tempkwargs)
 
 ####
 #   Data modeling functions
@@ -603,7 +668,7 @@ class JunoClassConstructor(type):
 # Map SQLAlchemy's types to string versions of them for convenience
 column_mapping = {} # Constructed in Juno.setup_database
 
-session = lambda: config('db_session')
+session = lambda: config('db_session')()
 
 def model(model_name, **kwargs):
     if not _hub: init()
@@ -663,7 +728,7 @@ def model(model_name, **kwargs):
     return tmp
 
 def find(model_cls):
-    if isinstance(mode_cls, str):
+    if isinstance(model_cls, str):
         try: model_cls = config('db_models')[model_cls]
         except: raise NameError("No such model exists ('%s')" %model_cls)
     return session().query(model_cls)
@@ -697,7 +762,9 @@ def get_application(process_func):
         # Parse query string arguments
         environ['QUERY_DICT'] = cgi.parse_qs(environ['QUERY_STRING'],
                                              keep_blank_values=1)
-        if environ['REQUEST_METHOD'] in ('POST', 'PUT'):
+        if environ['REQUEST_METHOD'] in ('POST', 'PUT') \
+            and environ['CONTENT_TYPE'] in ('application/x-www-form-urlencoded', \
+                'multipart/form-data'):
             fs = cgi.FieldStorage(fp=environ['wsgi.input'],
                                   environ=environ,
                                   keep_blank_values=True)
@@ -724,6 +791,7 @@ def get_application(process_func):
                                                  environ['REQUEST_METHOD'],
                                                  **environ)
         start_response(status_str, headers)
+        if config('use_sessions'): session().close()
         return [body]
 
     middleware_list = []
