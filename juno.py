@@ -6,7 +6,7 @@ import sys
 import traceback
 import time
 # Server imports
-import urlparse
+import urllib.parse
 import cgi
 
 class Juno(object):
@@ -14,8 +14,8 @@ class Juno(object):
         """Takes an optional configuration dictionary. """
         global _hub
         if _hub is not None:
-            print >>sys.stderr, 'Warning: there is already a Juno object created;'
-            print >>sys.stderr, '         you might get some weird behavior.'
+            print('Warning: there is already a Juno object created;', file=sys.stderr)
+            print('         you might get some weird behavior.', file=sys.stderr)
         else: _hub = self
         self.routes = []
         # Find the directory of the user's app, so we can setup static/template_roots
@@ -47,7 +47,7 @@ class Juno(object):
                 'get_template_handler':    _get_template_handler,
                 'render_template_handler': _render_template_handler,
                 'auto_reload_templates':   True,
-                'translations':            [], 
+                'translations':            [],
                 'template_kwargs':         {},
                 'template_root':           os.path.join(self.app_path, 'templates/'),
                 '404_template':            '404.html',
@@ -63,6 +63,10 @@ class Juno(object):
                 # Session options
                 'use_sessions': False,
                 'session_lib':  'beaker',
+                'session_kwargs': {},
+                'session_type': 'cookie',
+                'session_key': 'session',
+                'session_secret': '',
                 # Debugger
                 'use_debugger': False,
                 'raise_view_exceptions': False,
@@ -72,12 +76,12 @@ class Juno(object):
         if configuration is not None: self.config.update(configuration)
         if 'app_apth' not in self.config: self.config['app_path'] = self.app_path
         # Set up the static file handler
-        if self.config['use_static']: 
+        if self.config['use_static']:
             self.setup_static()
         # Set up templating
-        if self.config['use_templates']: 
+        if self.config['use_templates']:
             self.setup_templates()
-        # Set up the database 
+        # Set up the database
         if self.config['use_db']:
             self.setup_database()
 
@@ -96,9 +100,9 @@ class Juno(object):
         except:
             traceback = sys.exc_info()[2]
             if traceback is None:
-                print >>sys.stderr, 'Warning: Failed to find current working directory.'
-                print >>sys.stderr, '         Default static_root and template_root'
-                print >>sys.stderr, '         values may not work correctly.'
+                print('Warning: Failed to find current working directory.', file=sys.stderr)
+                print('         Default static_root and template_root', file=sys.stderr)
+                print('         values may not work correctly.', file=sys.stderr)
                 filename = './'
             else:
                 frame = traceback.tb_frame
@@ -145,15 +149,15 @@ class Juno(object):
 
     def setup_database(self):
         # DB library imports
-        from sqlalchemy import (create_engine, Table, MetaData, Column, Integer, 
-                                String, Unicode, Text, UnicodeText, Date, Numeric, 
-                                Time, Float, DateTime, Interval, Binary, Boolean, 
+        from sqlalchemy import (create_engine, Table, MetaData, Column, Integer,
+                                String, Unicode, Text, UnicodeText, Date, Numeric,
+                                Time, Float, DateTime, Interval, Binary, Boolean,
                                 PickleType)
         from sqlalchemy.orm import sessionmaker, mapper, scoped_session
         # Create global name mappings for model()
         global column_mapping
         column_mapping = {'string': String,       'str': String,
-                         'integer': Integer,      'int': Integer, 
+                         'integer': Integer,      'int': Integer,
                          'unicode': Unicode,     'text': Text,
                      'unicodetext': UnicodeText, 'date': Date,
                          'numeric': Numeric,     'time': Time,
@@ -178,21 +182,21 @@ class Juno(object):
         if mode is None: mode = config('mode')
         # Otherwise store the specified mode
         else: config('mode', mode)
-        
+
         if   mode == 'dev':  run_dev(config('bind_address'), config('dev_port'),  self.request)
         elif mode == 'scgi': run_scgi(config('bind_address'), config('scgi_port'), self.request)
         elif mode == 'fcgi': run_fcgi(config('bind_address'), config('fcgi_port'), self.request)
         elif mode == 'wsgi': return run_wsgi(self.request)
         elif mode == 'appengine': run_appengine(self.request)
         else:
-            print >>sys.stderr, 'Error: unrecognized mode'
-            print >>sys.stderr, '       exiting juno...'
+            print('Error: unrecognized mode', file=sys.stderr)
+            print('       exiting juno...', file=sys.stderr)
 
     def request(self, request, method='*', **kwargs):
         """Called when a request is received.  Routes a url to its view.
-        Returns a 3-tuple (status_string, headers, body) from 
+        Returns a 3-tuple (status_string, headers, body) from
         JunoResponse.render()."""
-        if config('log'): print '%s request for %s...' %(method, request)
+        if config('log'): print('%s request for %s...' %(method, request))
         req_obj = JunoRequest(kwargs)
         # Set the global response object in case the view wants to use it
         global _response
@@ -201,9 +205,9 @@ class Juno(object):
         if request[-1] != '/': request += '/'
         for route in self.routes:
             if not route.match(request, method): continue
-            if config('log'): print '%s matches, calling %s()...\n' %(
-                route.old_url, route.func.__name__)
-            # Get the return from the view    
+            if config('log'): print('%s matches, calling %s()...\n' %(
+                route.old_url, route.func.__name__))
+            # Get the return from the view
             if config('raise_view_exceptions') or config('use_debugger'):
                 response = route.dispatch(req_obj)
             else:
@@ -228,10 +232,10 @@ class Juno(object):
         if type(url) == str: self.routes.append(JunoRoute(url, func, method))
         # Otherwise add each url in the list
         else:
-            for u in url: self.routes.append(JunoRoute(u, func, method)) 
+            for u in url: self.routes.append(JunoRoute(u, func, method))
 
     def __getattr__(self, attr):
-        if attr in self.config.keys():
+        if attr in list(self.config.keys()):
             return self.config[attr]
         return None
 
@@ -240,25 +244,33 @@ class Juno(object):
 class JunoRoute(object):
     """Uses a simplified regex to grab url parts:
     i.e., '/hello/*:name/' compiles to '^/hello/(?P<name>\w+)/' """
+
+    # RE to match the splat format
+    splat_re = re.compile('^(?P<type>[*w]?):(?P<var>\w+)$')
+
     def __init__(self, url, func, method):
         # Make sure the url begins and ends in a '/'
         if url[0] != '/': url = '/' + url
         if url[-1] != '/': url += '/'
         # Store the old one before we modify it (we use it for __repr__)
         self.old_url = url
-        # RE to match the splat format
-        splat_re = re.compile('^\*?:(?P<var>\w+)$')
         # Start building our modified url
         buffer = '^'
         for part in url.split('/'):
             # Beginning and end entries are empty, so skip them
             if not part: continue
-            match_obj = splat_re.match(part)
+            md = self.splat_re.match(part)
             # If it doesn't match, just add it without modification
-            if match_obj is None: buffer += '/' + part
-            # Otherwise replace it with python's regex format
-            else: buffer += '/(?P<' + match_obj.group('var') + '>.*)'
-        # If we don't end with a wildcard, add a end of line modifier    
+            if not md:
+                buffer += '/' + part
+            else:
+                # Otherwise replace it with python's regex format
+                patterns = {'*': '.+', 'w': r'\w+'}
+                type_ = md.group('type') or '*'
+                if type_ not in patterns:
+                    raise ValueError('Invalid parse type: %s'%type_)
+                buffer += '/(?P<%s>%s)'%(md.group('var'), patterns[type_])
+        # If we don't end with a wildcard, add a end of line modifier
         if buffer[-1] != ')': buffer += '/$'
         else: buffer += '/'
         self.url = re.compile(buffer)
@@ -281,7 +293,7 @@ class JunoRoute(object):
         return self.func(req, **self.params)
 
     def __repr__(self):
-        return '<JunoRoute: %s %s - %s()>' %(self.method, self.old_url, 
+        return '<JunoRoute: %s %s - %s()>' %(self.method, self.old_url,
                                              self.func.__name__)
 
 class JunoRequest(object):
@@ -303,9 +315,9 @@ class JunoRequest(object):
             self.full_location = request['REQUEST_URI']
         else: self.full_location = self.location
         # Find the right user agent header
-        if 'HTTP_USER_AGENT' in request: 
+        if 'HTTP_USER_AGENT' in request:
             self.user_agent = request['HTTP_USER_AGENT']
-        elif 'User-Agent' in request: 
+        elif 'User-Agent' in request:
             self.user_agent = request['User-Agent']
         else: self.user_agent = ''
         self.combine_request_dicts()
@@ -315,39 +327,39 @@ class JunoRequest(object):
 
     def combine_request_dicts(self):
         input_dict = self.raw['QUERY_DICT'].copy()
-        for k, v in self.raw['POST_DICT'].items():
+        for k, v in list(self.raw['POST_DICT'].items()):
             # Combine repeated keys
-            if k in input_dict.keys(): input_dict[k].extend(v)
+            if k in list(input_dict.keys()): input_dict[k].extend(v)
             # Otherwise just add this key
             else: input_dict[k] = v
         # Reduce the dict - change one item lists ([a] to a)
-        for k, v in input_dict.items(): 
+        for k, v in list(input_dict.items()):
             if len(v) == 1: input_dict[k] = v[0]
         self.raw['input'] = input_dict
 
     def __getattr__(self, attr):
         # Try returning values from self.raw
-        if attr in self.keys(): return self.raw[attr]
+        if attr in list(self.keys()): return self.raw[attr]
         if attr == 'session' and config('log'):
-            print >>sys.stderr, "Error: To use sessions, enable 'use_sessions'"
-            print >>sys.stderr, "       when calling juno.init()"
-            print >>sys.stderr, ""
+            print("Error: To use sessions, enable 'use_sessions'", file=sys.stderr)
+            print("       when calling juno.init()", file=sys.stderr)
+            print("", file=sys.stderr)
         return None
 
     def input(self, arg=None):
         # No args: return the whole dictionary
         if arg is None: return self.raw['input']
         # Otherwise try to return the value for that key
-        if self.raw['input'].has_key(arg): 
+        if arg in self.raw['input']:
             return self.raw['input'][arg]
         return None
 
     # Make JunoRequest act as a dictionary for self.raw
     def __getitem__(self, key): return self.raw[key]
     def __setitem__(self, key, val): self.raw[key] = val
-    def keys(self): return self.raw.keys()
-    def items(self): return self.raw.items()
-    def values(self): return self.raw.values()
+    def keys(self): return list(self.raw.keys())
+    def items(self): return list(self.raw.items())
+    def values(self): return list(self.raw.values())
     def __len__(self): return len(self.raw)
     def __contains__(self, key): return key in self.raw
 
@@ -373,19 +385,26 @@ class JunoResponse(object):
         self.config = {
             'body': '',
             'status': 200,
-            'headers': { 'Content-Type': "%s; charset=%s"%(config('content_type'),config('charset')) },
+            'headers': { 'Content-Type': "%s; charset=%s"%(config('content_type'),config('charset')), },
         }
         if configuration is None: configuration = {}
         self.config.update(configuration)
         self.config.update(kwargs)
         self.config['headers']['Content-Length'] = len(self.config['body'])
-    
+
     # Add text and adjust content-length
     def append(self, text):
+        if type(text) is bytes:
+            if self.config['headers']['Content-Type'].startswith('text'):
+                text = str(text, config('charset'))
+            else:
+                self.config['body'] = text
+                self.config['headers']['Content-Length'] = len(text)
+                return self
         self.config['body'] += str(text)
         self.config['headers']['Content-Length'] = len(self.config['body'])
         return self
- 
+
     # Implement +=
     def __iadd__(self, text):
         return self.append(text)
@@ -394,15 +413,14 @@ class JunoResponse(object):
         """Returns a 3-tuple (status_string, headers, body)."""
         status_string = '%s %s' %(self.config['status'],
                                   self.status_codes[self.config['status']])
-        headers = [(k, str(v)) for k, v in self.config['headers'].items()]
-        body = '%s' %self.config['body']
-        return (status_string, headers, body)
+        headers = [(k, str(v)) for k, v in list(self.config['headers'].items())]
+        return (status_string, headers, self.config['body'])
 
     # Set a header value
     def header(self, header, value):
         self.config['headers'][header] = value
         return self
- 
+
     # Modify the headers dictionary when the response is treated like a dict
     def __setitem__(self, header, value): self.header(header, value)
     def __getitem__(self, header): return self.config['headers'][header]
@@ -434,8 +452,8 @@ def config(key, value=None):
         # Either pass a configuration dictionary
         if type(key) == dict: _hub.config.update(key)
         # Or retrieve a value
-        else: 
-            if key in _hub.config.keys(): 
+        else:
+            if key in list(_hub.config.keys()):
                 return _hub.config[key]
             return None
     # Or set a specific value
@@ -444,7 +462,7 @@ def config(key, value=None):
 def run(mode=None):
     """Start Juno, with an optional mode argument."""
     if _nut is not None:
-        print >>sys.stderr, 'Discard starting Juno because there is a nutshell opened.'
+        print('Discard starting Juno because there is a nutshell opened.', file=sys.stderr)
         return
     if _hub is None: init()
     if len(sys.argv) > 1:
@@ -458,8 +476,8 @@ _nut = None
 def open_nutshell():
     global _nut, _hub
     if _nut is not None:
-        print >>sys.stderr, 'Warning: there is already a Juno object in the nutshell;'
-        print >>sys.stderr, '         there can only be one in by time.'
+        print('Warning: there is already a Juno object in the nutshell;', file=sys.stderr)
+        print('         there can only be one in by time.', file=sys.stderr)
         return
     _nut, _hub = _hub, None
 
@@ -518,13 +536,13 @@ def subdirect(web, hub, request):
     if request == '': request = '/'
     if request[-1] != '/': request += '/'
     if request[ 0] != '/': request = '/' + request
-    if config('log'): print 'subdirecting from %s to %s' % (web['PATH_INFO'], request)
+    if config('log'): print('subdirecting from %s to %s' % (web['PATH_INFO'], request))
     org, _hub = _hub, hub
     status_string, headers, body = hub.request(request, web['REQUEST_METHOD'], **web.raw)
     _hub = org
     for key, value in headers: header(key, value)
     status(int(status_string.split()[0]))
-    append(body)
+    if _response.body != body: append(body) #FIXME
     return _response
 
 def redirect(url, code=302):
@@ -541,7 +559,7 @@ def assign(from_, to):
 
 def notfound(error='Unspecified error', file=None):
     """Sets the response to a 404, sets the body to 404_template."""
-    if config('log'): print >>sys.stderr, 'Not Found: %s' % error
+    if config('log'): print('Not Found: %s' % error, file=sys.stderr)
     status(404)
     mt = config('404_mimetype')
     if mt:
@@ -553,7 +571,7 @@ def servererror(error='Unspecified error', file=None):
     """Sets the response to a 500, sets the body to 500_template."""
     t, v, tb = sys.exc_info()
     if config('log'):
-        print >>sys.stderr, 'Error: (%s, %s)' % (t, v)
+        print('Error: (%s, %s)' % (t, v), file=sys.stderr)
         if config('500_traceback'):
             traceback.print_tb(tb)
     status(500)
@@ -584,7 +602,7 @@ def static_serve(web, file):
 
 def yield_file(filename, type=None):
     """Append the content of a file to the response. Guesses file type if not
-    included.  Returns 1 if requested file can't be accessed (often means doesn't 
+    included.  Returns 1 if requested file can't be accessed (often means doesn't
     exist).  Returns 2 if requested file is a directory.  Returns 7 on success. """
     if not os.access(filename, os.F_OK): return 1
     if os.path.isdir(filename): return 2
@@ -606,10 +624,10 @@ def template(template_path, template_dict=None, **kwargs):
     # Retreive a template object.
     t = get_template(template_path)
     # Render it without arguments.
-    if not kwargs and not template_dict: 
+    if not kwargs and not template_dict:
         return append(render_template(t))
     # Render the template with a provided template dictionary
-    if template_dict: 
+    if template_dict:
         return append(render_template(t, **template_dict))
     # Render the template with **kwargs
     return append(render_template(t, **kwargs))
@@ -623,7 +641,7 @@ def get_template(template_path):
 # The default value of config('get_template_handler')
 def _get_template_handler(template_path):
     """Return a template object.  This is defined for the Jinja2 and
-    Mako libraries, otherwise you have to override it.  Takes one 
+    Mako libraries, otherwise you have to override it.  Takes one
     parameter: a string containing the desired template path.  Needs
     to return an object that will be passed to your rendering function."""
     return config('template_env').get_template(template_path)
@@ -640,10 +658,7 @@ def _render_template_handler(template_obj, **kwargs):
     Defined for Jinja2 and Mako - override it if you use another
     library.  Takes a template object as the first parameter, with an
     optional **kwargs parameter.  Needs to return a string."""
-    if config('template_lib') == 'mako': return template_obj.render(**kwargs)
-    if config('template_lib') == 'jinja2':
-        # Jinja needs its output encoded here
-        return template_obj.render(**kwargs).encode(config('charset'))
+    return template_obj.render(**kwargs)
 
 def autotemplate(urls, template_path, **kwargs):
     """Automatically renders a template for a given path.  Currently can't
@@ -659,12 +674,6 @@ def autotemplate(urls, template_path, **kwargs):
 #   Data modeling functions
 ####
 
-class JunoClassConstructor(type):
-    def __new__(cls, name, bases, dct):
-        return type.__new__(cls, name, bases, dct)
-    def __init__(cls, name, bases, dct):
-        super(JunoClassConstructor, cls).__init__(name, bases, dct)
-
 # Map SQLAlchemy's types to string versions of them for convenience
 column_mapping = {} # Constructed in Juno.setup_database
 
@@ -674,9 +683,9 @@ def model(model_name, **kwargs):
     if not _hub: init()
     # Functions for the class
     def __init__(self, **kwargs):
-        for k, v in kwargs.items(): 
-            self.__dict__[k] = v
-    def add(self): 
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+    def add(self):
         session().add(self)
         return self
     def save(self):
@@ -684,13 +693,13 @@ def model(model_name, **kwargs):
         if self not in s: s.add(self)
         s.commit()
         return self
-    def __repr__(self): 
+    def __repr__(self):
         return '<%s: id = %s>' %(self.__name__, self.id)
     def __str__(self):
         return '<%s: id = %s>' %(self.__name__, self.id)
     # Some static functions for the class
-    def find_func(cls):
-        return session().query(cls)
+    def find_func(cls, *args):
+        return session().query(cls, *args)
     # Build the class's __dict__
     cls_dict = {'__init__': __init__,
                 'add':      add,
@@ -703,7 +712,7 @@ def model(model_name, **kwargs):
     # Parse kwargs to get column definitions
     cols = [ Column('id', Integer, primary_key=True), ]
     for k, v in kwargs.items():
-        if callable(v):
+        if hasattr(v, '__call__'):
             cls_dict[k] = v
         elif isinstance(v, Column):
             if not v.name: v.name = k
@@ -713,10 +722,10 @@ def model(model_name, **kwargs):
             if v in column_mapping: v = column_mapping[v]
             else: raise NameError("'%s' is not an allowed database column" %v)
             cols.append(Column(k, v))
-    # Create the class    
-    tmp = JunoClassConstructor(model_name, (object,), cls_dict)
+    # Create the class
+    tmp = type(model_name, (object,), cls_dict)
     # Add the functions that need an instance of the class
-    tmp.find = staticmethod(lambda: find_func(tmp))
+    tmp.find = classmethod(find_func)
     # Create the table
     metadata = MetaData()
     tmp_table = Table(model_name + 's', metadata, *cols)
@@ -743,15 +752,15 @@ def get_application(process_func):
         # the `environ` was None.  Seems to have stopped, but I don't
         # know why.  This message was to clarify what happened.
         if environ is None:
-            print >>sys.stderr, 'Error: environ is None for some reason.'
-            print >>sys.stderr, 'Error: environ=%s' %environ
+            print('Error: environ is None for some reason.', file=sys.stderr)
+            print('Error: environ=%s' %environ, file=sys.stderr)
             sys.exit()
         # Ensure some variable exist (WSGI doesn't guarantee them)
-        if 'PATH_INFO' not in environ.keys() or not environ['PATH_INFO']: 
+        if 'PATH_INFO' not in list(environ.keys()) or not environ['PATH_INFO']:
             environ['PATH_INFO'] = '/'
-        if 'QUERY_STRING' not in environ.keys():
+        if 'QUERY_STRING' not in list(environ.keys()):
             environ['QUERY_STRING'] = ''
-        if 'CONTENT_LENGTH' not in environ.keys() or not environ['CONTENT_LENGTH']:
+        if 'CONTENT_LENGTH' not in list(environ.keys()) or not environ['CONTENT_LENGTH']:
             environ['CONTENT_LENGTH'] = '0'
         # Standardize some header names
         environ['DOCUMENT_URI'] = environ['PATH_INFO']
@@ -760,7 +769,7 @@ def get_application(process_func):
         else:
             environ['REQUEST_URI'] = environ['DOCUMENT_URI']
         # Parse query string arguments
-        environ['QUERY_DICT'] = cgi.parse_qs(environ['QUERY_STRING'],
+        environ['QUERY_DICT'] = urllib.parse.parse_qs(environ['QUERY_STRING'],
                                              keep_blank_values=1)
         if environ['REQUEST_METHOD'] in ('POST', 'PUT') \
             and environ['CONTENT_TYPE'] in ('application/x-www-form-urlencoded', \
@@ -768,7 +777,7 @@ def get_application(process_func):
             fs = cgi.FieldStorage(fp=environ['wsgi.input'],
                                   environ=environ,
                                   keep_blank_values=True)
-            
+
             post_dict = {}
             if fs.list:
                 for field in fs.list:
@@ -776,14 +785,14 @@ def get_application(process_func):
                         value = field
                     else:
                         value = field.value
-                    
+
                     # Each element of post_dict will be a list, even if it contains only
                     # one item. This is in line with QUERY_DICT which also works like this.
                     if not field.name in post_dict:
                         post_dict[field.name] = [value]
                     else:
                         post_dict[field.name].append(value)
-            
+
             environ['POST_DICT'] = post_dict
         else: environ['POST_DICT'] = {}
         # Done parsing inputs, now ready to send to Juno
@@ -792,13 +801,22 @@ def get_application(process_func):
                                                  **environ)
         start_response(status_str, headers)
         if config('use_sessions'): session().close()
+        if isinstance(body, str): body = body.encode(config('charset'))
         return [body]
 
     middleware_list = []
     if config('use_debugger'):
         middleware_list.append(('werkzeug.DebuggedApplication', {'evalex': True}))
     if config('use_sessions') and config('session_lib') == 'beaker':
-        middleware_list.append(('beaker.middleware.SessionMiddleware', {}))
+        opts = {'session.key': config('session_key'), 'session.secret': config('session_secret'), 'session.cookie_expires': False}
+        opts.update(config('session_kwargs'))
+        if config('session_type') == 'cookie':
+            opts['session.type'] = 'cookie'
+            opts['session.validate_key'] = config('session_secret')
+        else:
+            opts['session.type'] = 'ext:database'
+            opts['session.url'] = config('db_type') + '://' + config('db_location')
+        middleware_list.append(('beaker.middleware.SessionMiddleware', opts))
     middleware_list.extend(config('middleware'))
     application = _load_middleware(application, middleware_list)
 
@@ -813,21 +831,21 @@ def _load_middleware(application, middleware_list):
             obj = getattr(__import__(module, None, None, [name]), name)
             application = obj(application, **args)
         except (ImportError, AttributeError):
-            print 'Warning: failed to load middleware %s' % name
+            print('Warning: failed to load middleware %s' % name)
     return application
 
 def run_dev(addr, port, process_func):
     from wsgiref.simple_server import make_server
     app = get_application(process_func)
-    print ''
-    print 'running Juno development server, <C-c> to exit...'
-    print 'connect to 127.0.0.1:%s to use your app...' %port
-    print ''
+    print('')
+    print('running Juno development server, <C-c> to exit...')
+    print('connect to 127.0.0.1:%s to use your app...' %port)
+    print('')
     srv = make_server(addr, port, app)
     try:
         srv.serve_forever()
     except:
-        print 'interrupted; exiting juno...'
+        print('interrupted; exiting juno...')
         srv.socket.close()
 
 def run_scgi(addr, port, process_func):
