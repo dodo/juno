@@ -268,7 +268,7 @@ class JunoRoute(object):
                 patterns = {'*': '.+', 'w': r'\w+'}
                 type_ = md.group('type') or '*'
                 if type_ not in patterns:
-                    raise ValueError, 'Invalid parse type: %s'%type_
+                    raise ValueError('Invalid parse type: %s'%type_)
                 buffer += '/(?P<%s>%s)'%(md.group('var'), patterns[type_])
         # If we don't end with a wildcard, add a end of line modifier
         if buffer[-1] != ')': buffer += '/$'
@@ -712,7 +712,7 @@ def model(model_name, **kwargs):
     # Parse kwargs to get column definitions
     cols = [ Column('id', Integer, primary_key=True), ]
     for k, v in kwargs.items():
-        if callable(v):
+        if hasattr(v, '__call__'):
             cls_dict[k] = v
         elif isinstance(v, Column):
             if not v.name: v.name = k
