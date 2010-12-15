@@ -63,6 +63,10 @@ class Juno(object):
                 # Session options
                 'use_sessions': False,
                 'session_lib':  'beaker',
+                'session_kwargs': {},
+                'session_type': 'cookie',
+                'session_key': 'session',
+                'session_secret': '',
                 # Debugger
                 'use_debugger': False,
                 'raise_view_exceptions': False,
@@ -240,24 +244,32 @@ class Juno(object):
 class JunoRoute(object):
     """Uses a simplified regex to grab url parts:
     i.e., '/hello/*:name/' compiles to '^/hello/(?P<name>\w+)/' """
+
+    # RE to match the splat format
+    splat_re = re.compile('^(?P<type>[*w]?):(?P<var>\w+)$')
+
     def __init__(self, url, func, method):
         # Make sure the url begins and ends in a '/'
         if url[0] != '/': url = '/' + url
         if url[-1] != '/': url += '/'
         # Store the old one before we modify it (we use it for __repr__)
         self.old_url = url
-        # RE to match the splat format
-        splat_re = re.compile('^\*?:(?P<var>\w+)$')
         # Start building our modified url
         buffer = '^'
         for part in url.split('/'):
             # Beginning and end entries are empty, so skip them
             if not part: continue
-            match_obj = splat_re.match(part)
+            md = self.splat_re.match(part)
             # If it doesn't match, just add it without modification
-            if match_obj is None: buffer += '/' + part
-            # Otherwise replace it with python's regex format
-            else: buffer += '/(?P<' + match_obj.group('var') + '>.*)'
+            if not md:
+                buffer += '/' + part
+            else:
+                # Otherwise replace it with python's regex format
+                patterns = {'*': '.+', 'w': r'\w+'}
+                type_ = md.group('type') or '*'
+                if type_ not in patterns:
+                    raise ValueError, 'Invalid parse type: %s'%type_
+                buffer += '/(?P<%s>%s)'%(md.group('var'), patterns[type_])
         # If we don't end with a wildcard, add a end of line modifier
         if buffer[-1] != ')': buffer += '/$'
         else: buffer += '/'
@@ -662,12 +674,6 @@ def autotemplate(urls, template_path, **kwargs):
 #   Data modeling functions
 ####
 
-class JunoClassConstructor(type):
-    def __new__(cls, name, bases, dct):
-        return type.__new__(cls, name, bases, dct)
-    def __init__(cls, name, bases, dct):
-        super(JunoClassConstructor, cls).__init__(name, bases, dct)
-
 # Map SQLAlchemy's types to string versions of them for convenience
 column_mapping = {} # Constructed in Juno.setup_database
 
@@ -677,8 +683,8 @@ def model(model_name, **kwargs):
     if not _hub: init()
     # Functions for the class
     def __init__(self, **kwargs):
-        for k, v in list(kwargs.items()):
-            self.__dict__[k] = v
+        for k, v in kwargs.items():
+            setattr(self, k, v)
     def add(self):
         session().add(self)
         return self
@@ -692,8 +698,8 @@ def model(model_name, **kwargs):
     def __str__(self):
         return '<%s: id = %s>' %(self.__name__, self.id)
     # Some static functions for the class
-    def find_func(cls):
-        return session().query(cls)
+    def find_func(cls, *args):
+        return session().query(cls, *args)
     # Build the class's __dict__
     cls_dict = {'__init__': __init__,
                 'add':      add,
@@ -705,8 +711,8 @@ def model(model_name, **kwargs):
                }
     # Parse kwargs to get column definitions
     cols = [ Column('id', Integer, primary_key=True), ]
-    for k, v in list(kwargs.items()):
-        if hasattr(v, '__call__'):
+    for k, v in kwargs.items():
+        if callable(v):
             cls_dict[k] = v
         elif isinstance(v, Column):
             if not v.name: v.name = k
@@ -717,9 +723,9 @@ def model(model_name, **kwargs):
             else: raise NameError("'%s' is not an allowed database column" %v)
             cols.append(Column(k, v))
     # Create the class
-    tmp = JunoClassConstructor(model_name, (object,), cls_dict)
+    tmp = type(model_name, (object,), cls_dict)
     # Add the functions that need an instance of the class
-    tmp.find = staticmethod(lambda: find_func(tmp))
+    tmp.find = classmethod(find_func)
     # Create the table
     metadata = MetaData()
     tmp_table = Table(model_name + 's', metadata, *cols)
@@ -802,7 +808,15 @@ def get_application(process_func):
     if config('use_debugger'):
         middleware_list.append(('werkzeug.DebuggedApplication', {'evalex': True}))
     if config('use_sessions') and config('session_lib') == 'beaker':
-        middleware_list.append(('beaker.middleware.SessionMiddleware', {}))
+        opts = {'session.key': config('session_key'), 'session.secret': config('session_secret'), 'session.cookie_expires': False}
+        opts.update(config('session_kwargs'))
+        if config('session_type') == 'cookie':
+            opts['session.type'] = 'cookie'
+            opts['session.validate_key'] = config('session_secret')
+        else:
+            opts['session.type'] = 'ext:database'
+            opts['session.url'] = config('db_type') + '://' + config('db_location')
+        middleware_list.append(('beaker.middleware.SessionMiddleware', opts))
     middleware_list.extend(config('middleware'))
     application = _load_middleware(application, middleware_list)
 
