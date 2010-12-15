@@ -7,6 +7,12 @@ Juno
 * Homepage: [http://brianreily.com/project/juno][homepage]
 * Repository: [http://github.com/breily/juno][repo]
 
+Info
+----
+
+This is the python3 version of Juno.
+
+For the python2 version please check out branch 'python2'.
 
 Using Juno
 ----------
@@ -51,18 +57,14 @@ Features
 Install
 -------
 
-* You can use easy_install:
-    
-        easy_install Juno
+* pull from [Github][repo], and then do:
 
-* Or pull from [Github][repo], and then do:
-
-        $ python setup.py install   # As root
-        $ python
+        $ python3 setup.py install   # As root
+        $ python3
         >>> import juno             # Make sure everything worked
 
 * Requires: [SQLAlchemy][sqlalchemy]
-* Optional: 
+* Optional:
     * [Jinja2][jinja2]/[Mako][mako] (for templating)
     * [Flup][flup]        (for SCGI/FastCGI only)
     * [Beaker][beaker]      (for sessions)
