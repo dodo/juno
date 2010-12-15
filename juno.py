@@ -624,8 +624,8 @@ def model(model_name, **kwargs):
     def __str__(self):
         return '<%s: id = %s>' %(self.__name__, self.id)
     # Some static functions for the class
-    def find_func(cls):
-        return session().query(cls)
+    def find_func(cls, *args):
+        return session().query(cls, *args)
     # Build the class's __dict__
     cls_dict = {'__init__': __init__,
                 'add':      add,
@@ -651,7 +651,7 @@ def model(model_name, **kwargs):
     # Create the class
     tmp = JunoClassConstructor(model_name, (object,), cls_dict)
     # Add the functions that need an instance of the class
-    tmp.find = staticmethod(lambda: find_func(tmp))
+    tmp.find = staticmethod(lambda *args: find_func(tmp, *args))
     # Create the table
     metadata = MetaData()
     tmp_table = Table(model_name + 's', metadata, *cols)
