@@ -390,7 +390,8 @@ class JunoResponse(object):
         if configuration is None: configuration = {}
         self.config.update(configuration)
         self.config.update(kwargs)
-        self.config['headers']['Content-Length'] = len(self.config['body'])
+        self.config['headers']['Content-Length'] = \
+            len(bytes(self.config['body'], config('charset')))
 
     # Add text and adjust content-length
     def append(self, text):
@@ -399,10 +400,12 @@ class JunoResponse(object):
                 text = str(text, config('charset'))
             else:
                 self.config['body'] = text
-                self.config['headers']['Content-Length'] = len(text)
+                self.config['headers']['Content-Length'] = \
+                    len(bytes(text, config('charset')))
                 return self
         self.config['body'] += str(text)
-        self.config['headers']['Content-Length'] = len(self.config['body'])
+        self.config['headers']['Content-Length'] = \
+            len(bytes(self.config['body'], config('charset')))
         return self
 
     # Implement +=
