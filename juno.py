@@ -390,8 +390,7 @@ class JunoResponse(object):
         if configuration is None: configuration = {}
         self.config.update(configuration)
         self.config.update(kwargs)
-        self.config['headers']['Content-Length'] = \
-            len(bytes(self.config['body'], config('charset')))
+        self.config['headers']['Content-Length'] = get_content_length(self.config['body'])
 
     # Add text and adjust content-length
     def append(self, text):
@@ -400,12 +399,10 @@ class JunoResponse(object):
                 text = str(text, config('charset'))
             else:
                 self.config['body'] = text
-                self.config['headers']['Content-Length'] = \
-                    len(bytes(text, config('charset')))
+                self.config['headers']['Content-Length'] = get_content_length(text)
                 return self
         self.config['body'] += str(text)
-        self.config['headers']['Content-Length'] = \
-            len(bytes(self.config['body'], config('charset')))
+        self.config['headers']['Content-Length'] = get_content_length(self.config['body'])
         return self
 
     # Implement +=
@@ -491,6 +488,11 @@ def close_nutshell():
 
 def getHub():
     return _hub
+
+def get_content_length(data):
+    if isinstance(data, str):
+        return len(bytes(data, config('charset')))
+    return len(data)
 
 #
 #   Decorators to add routes based on request methods
