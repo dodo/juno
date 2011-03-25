@@ -556,6 +556,14 @@ def redirect(url, code=302):
     _response.config['headers'] = { 'Location': url }
     return _response
 
+def direct(web, request, **kwargs):
+    web.raw.update(kwargs)
+    status_string, headers, body = _hub.request(request, web['REQUEST_METHOD'], **web.raw)
+    for key, value in headers: header(key, value)
+    status(int(status_string.split()[0]))
+    if _response.body != body: append(body) #FIXME
+    return _response
+
 def assign(from_, to):
     if type(from_) not in (list, tuple): from_ = [from_]
     for url in from_:
