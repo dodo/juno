@@ -192,7 +192,7 @@ class Juno(object):
             print('Error: unrecognized mode', file=sys.stderr)
             print('       exiting juno...', file=sys.stderr)
 
-    def request(self, request, method='*', **kwargs):
+    def request(self, request, method='*', params={}, **kwargs):
         """Called when a request is received.  Routes a url to its view.
         Returns a 3-tuple (status_string, headers, body) from
         JunoResponse.render()."""
@@ -205,6 +205,7 @@ class Juno(object):
         if request[-1] != '/': request += '/'
         for route in self.routes:
             if not route.match(request, method): continue
+            route.params.update(params)
             if config('log'): print('%s matches, calling %s()...\n' %(
                 route.old_url, route.func.__name__))
             # Get the return from the view
@@ -557,8 +558,8 @@ def redirect(url, code=302):
     return _response
 
 def direct(web, request, **kwargs):
-    web.raw.update(kwargs)
-    status_string, headers, body = _hub.request(request, web['REQUEST_METHOD'], **web.raw)
+    status_string, headers, body = _hub.request(
+        request, web['REQUEST_METHOD'], params=kwargs, **web.raw)
     for key, value in headers: header(key, value)
     status(int(status_string.split()[0]))
     if _response.body != body: append(body) #FIXME
