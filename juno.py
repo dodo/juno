@@ -192,7 +192,7 @@ class Juno(object):
             print('Error: unrecognized mode', file=sys.stderr)
             print('       exiting juno...', file=sys.stderr)
 
-    def request(self, request, method='*', params={}, **kwargs):
+    def request(self, request, method='*', params=None, **kwargs):
         """Called when a request is received.  Routes a url to its view.
         Returns a 3-tuple (status_string, headers, body) from
         JunoResponse.render()."""
@@ -205,7 +205,9 @@ class Juno(object):
         if request[-1] != '/': request += '/'
         for route in self.routes:
             if not route.match(request, method): continue
-            route.params.update(params)
+            if params:
+                org_params = route.params.copy()
+                route.params.update(params)
             if config('log'): print('%s matches, calling %s()...\n' %(
                 route.old_url, route.func.__name__))
             # Get the return from the view
@@ -215,9 +217,12 @@ class Juno(object):
                 try:
                     response = route.dispatch(req_obj)
                 except:
+                    if params: route.params = org_params
                     return servererror(error=cgi.escape(traceback.format_exc())).render()
             # If nothing returned, use the global object
             if response is None: response = _response
+            # If user gives some params, be sure to reset it
+            if params: route.params = org_params
             # If we don't have a string, render the Response to one
             if isinstance(response, JunoResponse):
                 return response.render()
